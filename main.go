@@ -3,33 +3,32 @@ package main
 import (
 	"fmt"
 	"github.com/bronzdoc/gops/lib/util"
+	"github.com/gosuri/uitable"
 	"net"
 	"os"
-	"strconv"
 )
 
-func gops(ip, startPort, endPort, portType string) {
-	startPortInt, _ := strconv.Atoi(startPort)
-	endPortInt, _ := strconv.Atoi(endPort)
+func gops(ip, protocol string) {
+	table := uitable.New()
+	table.MaxColWidth = 100
+	table.AddRow("PORT", "PROTOCOL", "DESCRIPTION")
 
 	// Scan ports
-	for port := startPortInt; port < endPortInt; port += 1 {
+	for port := 0; port <= 65535; port += 1 {
 		ip := fmt.Sprintf("%s:%d", ip, port)
-		_, err := net.Dial(portType, ip)
-
+		_, err := net.Dial(protocol, ip)
 		if err == nil {
 			if val, ok := util.CommonPorts[port]; ok {
-				fmt.Printf("%s/%d open -- %s \n", portType, port, val)
+				table.AddRow(port, protocol, val)
 			} else {
-				fmt.Printf("%s/%d open -- N\\A\n", portType, port)
+				table.AddRow(port, protocol, "(unknown)")
 			}
 		}
 	}
+	fmt.Println(table)
 }
 
 func main() {
 	ip := os.Args[1]
-	startPort := os.Args[2]
-	endPort := os.Args[3]
-	gops(ip, startPort, endPort, "tcp")
+	gops(ip, "tcp")
 }
