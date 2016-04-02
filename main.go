@@ -2,21 +2,27 @@ package main
 
 import (
 	"fmt"
+	"github.com/bronzdoc/gops/lib/util"
 	"net"
 	"os"
 	"strconv"
 )
 
-func gopos(ip, startPort, endPort string) {
+func gops(ip, startPort, endPort, portType string) {
 	startPortInt, _ := strconv.Atoi(startPort)
 	endPortInt, _ := strconv.Atoi(endPort)
 
 	// Scan ports
 	for port := startPortInt; port < endPortInt; port += 1 {
 		ip := fmt.Sprintf("%s:%d", ip, port)
-		_, err := net.Dial("tcp", ip)
+		_, err := net.Dial(portType, ip)
+
 		if err == nil {
-			fmt.Printf("Port %d open\n", port)
+			if val, ok := util.CommonPorts[port]; ok {
+				fmt.Printf("%s/%d open -- %s \n", portType, port, val)
+			} else {
+				fmt.Printf("%s/%d open -- N\\A\n", portType, port)
+			}
 		}
 	}
 }
@@ -25,5 +31,5 @@ func main() {
 	ip := os.Args[1]
 	startPort := os.Args[2]
 	endPort := os.Args[3]
-	gopos(ip, startPort, endPort)
+	gops(ip, startPort, endPort, "tcp")
 }
