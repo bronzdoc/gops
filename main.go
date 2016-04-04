@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/CrowdSurge/banner"
 	"github.com/bronzdoc/gops/lib/util"
 	"github.com/gosuri/uilive"
 	"github.com/gosuri/uitable"
@@ -30,17 +31,19 @@ func gops(ip, protocol string) {
 			} else {
 				table.AddRow(port, protocol, "(unknown)")
 			}
-			fmt.Fprintf(status, "Scanning...(%d/%d)\n", port, PORTS)
+			fmt.Fprintf(status, "Scanning...(%d%%)\n", int((float32(port)/PORTS)*100))
 			time.Sleep(time.Millisecond * 5)
 		}
 	}
 
-	fmt.Fprintf(status, "Finished: Scanning %d ports\n", PORTS)
+	fmt.Fprintf(status, "Finished: Scanning (100%%)\n")
 	status.Stop()
 	fmt.Println(table)
 }
 
 func main() {
+	banner.Print("gops")
+	fmt.Println("")
 	ip := os.Args[1]
 	gops(ip, "tcp")
 }
