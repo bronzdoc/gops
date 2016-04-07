@@ -32,7 +32,7 @@ func gops(ip, protocol string) {
 				table.AddRow(port, protocol, "(unknown)")
 			}
 			fmt.Fprintf(status, "Scanning...(%d%%)\n", int((float32(port)/PORTS)*100))
-			time.Sleep(time.Millisecond * 5)
+			time.Sleep(time.Millisecond * 1)
 		}
 	}
 
