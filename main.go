@@ -3,15 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/CrowdSurge/banner"
 	"github.com/bronzdoc/gops/lib/util"
 	"github.com/gosuri/uilive"
 	"github.com/gosuri/uitable"
 	"net"
-	"time"
 )
-
-const PORTS = 65535
 
 func getProtocol(tcp, udp *bool) string {
 	var protocol string
@@ -30,10 +26,9 @@ func scanTCP(host string, port int, table *uitable.Table) {
 	if err == nil {
 		if val, ok := util.CommonPorts[port]; ok {
 			table.AddRow(port, "tcp", val)
+		} else {
+			table.AddRow(port, "tcp", "(unknown)")
 		}
-		//else {
-		//	table.AddRow(port, "tcp", "(unknown)")
-		//}
 	}
 }
 
@@ -42,10 +37,9 @@ func scanUDP(host string, port int, table *uitable.Table) {
 	if err == nil {
 		if val, ok := util.CommonPorts[port]; ok {
 			table.AddRow(port, "udp", val)
+		} else {
+			table.AddRow(port, "udp", "(unknown)")
 		}
-		//else {
-		//	table.AddRow(port, "udp", "(unknown)")
-		//}
 	}
 }
 
@@ -68,27 +62,30 @@ func gops(options map[string]interface{}) {
 
 	status := uilive.New()
 	status.Start()
+	start := *options["start"].(*int)
+	end := *options["end"].(*int)
 
 	// Scan ports
-	for port := 0; port <= PORTS; port++ {
+	for port := start; port <= end; port++ {
 		host := fmt.Sprintf("%s:%d", *options["host"].(*string), port)
 		displayScanInfo(host, port, protocol, table)
-		fmt.Fprintf(status, "Scanning...(%d%%)\n", int((float32(port)/PORTS)*100))
-		time.Sleep(time.Millisecond * 1)
+		fmt.Fprintf(status, "gops scanning...(%d%%)\n", int((float32(port)/float32(end))*100))
+		status.Flush()
 	}
 
-	fmt.Fprintf(status, "Finished: Scanning (100%%)\n")
+	fmt.Fprintf(status, "gops finished scanning (100%%)\n")
 	status.Stop()
 	fmt.Println(table)
 }
 
 func main() {
 	options := map[string]interface{}{
-		"host": flag.String("host", "localhost", "host to scan"),
-		"tcp":  flag.Bool("tcp", false, "Show only tcp ports open"),
-		"udp":  flag.Bool("udp", false, "Show only udp ports open"),
+		"host":  flag.String("host", "localhost", "host to scan"),
+		"tcp":   flag.Bool("tcp", false, "Show only tcp ports open"),
+		"udp":   flag.Bool("udp", false, "Show only udp ports open"),
+		"start": flag.Int("start", 0, "Port to start the scan"),
+		"end":   flag.Int("end", 65535, "Port to end the scan"),
 	}
 	flag.Parse()
-	banner.Print("gops")
 	gops(options)
 }
