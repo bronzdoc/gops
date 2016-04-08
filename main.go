@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"github.com/CrowdSurge/banner"
 	"github.com/bronzdoc/gops/lib/util"
@@ -42,6 +43,15 @@ func gops(ip, protocol string) {
 }
 
 func main() {
+	options := map[interface{}]interface{}{
+		"help": flag.Bool("help", false, "Show this help message"),
+		"host": flag.String("host", "localhost", "host to scan"),
+		"tcp":  flag.Bool("tcp", false, "Show only tcp ports open"),
+		"udp":  flag.Bool("udp", false, "Show only udp ports open"),
+	}
+	flag.Parse()
+	_ = options
+
 	banner.Print("gops")
 	fmt.Println("")
 	ip := os.Args[1]
