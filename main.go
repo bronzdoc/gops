@@ -84,7 +84,6 @@ func gops(options map[string]interface{}) {
 
 func main() {
 	options := map[string]interface{}{
-		"help": flag.Bool("help", false, "Show this help message"),
 		"host": flag.String("host", "localhost", "host to scan"),
 		"tcp":  flag.Bool("tcp", false, "Show only tcp ports open"),
 		"udp":  flag.Bool("udp", false, "Show only udp ports open"),
