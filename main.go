@@ -11,7 +11,10 @@ import (
 
 func getProtocol(tcp, udp *bool) string {
 	var protocol string
-	if *tcp {
+
+	if *tcp && *udp {
+		protocol = "all"
+	} else if *tcp {
 		protocol = "tcp"
 	} else if *udp {
 		protocol = "udp"
@@ -37,9 +40,10 @@ func scanUDP(host string, port int, table *uitable.Table) {
 	if err == nil {
 		if val, ok := util.CommonPorts[port]; ok {
 			table.AddRow(port, "udp", val)
-		} else {
-			table.AddRow(port, "udp", "(unknown)")
 		}
+		//else {
+		//	table.AddRow(port, "udp", "(unknown)")
+		//}
 	}
 }
 
