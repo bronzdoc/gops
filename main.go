@@ -11,7 +11,10 @@ import (
 
 func getProtocol(tcp, udp *bool) string {
 	var protocol string
-	if *tcp {
+
+	if *tcp && *udp {
+		protocol = "all"
+	} else if *tcp {
 		protocol = "tcp"
 	} else if *udp {
 		protocol = "udp"
@@ -27,20 +30,41 @@ func scanTCP(host string, port int, table *uitable.Table) {
 		if val, ok := util.CommonPorts[port]; ok {
 			table.AddRow(port, "tcp", val)
 		} else {
-			table.AddRow(port, "tcp", "(unknown)")
+			table.AddRow(port, "tcp", "(?)")
 		}
 	}
 }
 
 func scanUDP(host string, port int, table *uitable.Table) {
-	_, err := net.Dial("udp", host)
-	if err == nil {
+	serverAddr, err := net.ResolveUDPAddr("udp", host)
+	util.LogError(err)
+
+	localAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+	util.LogError(err)
+
+	conn, err := net.DialUDP("udp", localAddr, serverAddr)
+	util.LogError(err)
+
+	// Write 3 times to the udp socket and check
+	// if there's any kind of error
+	error_count := 0
+	for i := 0; i <= 3; i++ {
+		buf := []byte("0")
+		_, err := conn.Write(buf)
+		if err != nil {
+			error_count++
+		}
+	}
+
+	if error_count <= 0 {
 		if val, ok := util.CommonPorts[port]; ok {
 			table.AddRow(port, "udp", val)
 		} else {
-			table.AddRow(port, "udp", "(unknown)")
+			table.AddRow(port, "udp", "(?)")
 		}
 	}
+
+	defer conn.Close()
 }
 
 func displayScanInfo(host string, port int, protocol string, table *uitable.Table) {
@@ -62,6 +86,7 @@ func gops(options map[string]interface{}) {
 
 	status := uilive.New()
 	status.Start()
+	_ = status
 	start := *options["start"].(*int)
 	end := *options["end"].(*int)
 
@@ -80,7 +105,7 @@ func gops(options map[string]interface{}) {
 
 func main() {
 	options := map[string]interface{}{
-		"host":  flag.String("host", "localhost", "host to scan"),
+		"host":  flag.String("host", "127.0.0.1", "host to scan"),
 		"tcp":   flag.Bool("tcp", false, "Show only tcp ports open"),
 		"udp":   flag.Bool("udp", false, "Show only udp ports open"),
 		"start": flag.Int("start", 0, "Port to start the scan"),
