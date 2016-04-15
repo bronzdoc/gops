@@ -37,19 +37,13 @@ func scanTCP(host string, port int, table *uitable.Table) {
 
 func scanUDP(host string, port int, table *uitable.Table) {
 	serverAddr, err := net.ResolveUDPAddr("udp", host)
-	if err != nil {
-		fmt.Println("Error: ", err)
-	}
+	util.LogError(err)
 
 	localAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
-	if err != nil {
-		fmt.Println("Error: ", err)
-	}
+	util.LogError(err)
 
 	conn, err := net.DialUDP("udp", localAddr, serverAddr)
-	if err != nil {
-		fmt.Println("Error: ", err)
-	}
+	util.LogError(err)
 
 	// Write 3 times to the udp socket and check
 	// if there's any kind of error
