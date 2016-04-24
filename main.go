@@ -24,18 +24,16 @@ func getProtocol(tcp, udp *bool) string {
 	return protocol
 }
 
-func scanTCP(host string, port int, table *uitable.Table) {
-	_, err := net.Dial("tcp", host)
-	if err == nil {
-		if val, ok := util.CommonPorts[port]; ok {
-			table.AddRow(port, "tcp", val)
-		} else {
-			table.AddRow(port, "tcp", "(?)")
-		}
+func scanTCP(host string, port int, table *uitable.Table) int {
+	conn, err := net.Dial("tcp", host)
+	if err != nil {
+		return -1
 	}
+	defer conn.Close()
+	return port
 }
 
-func scanUDP(host string, port int, table *uitable.Table) {
+func scanUDP(host string, port int, table *uitable.Table) int {
 	serverAddr, err := net.ResolveUDPAddr("udp", host)
 	util.LogError(err)
 
@@ -56,25 +54,43 @@ func scanUDP(host string, port int, table *uitable.Table) {
 		}
 	}
 
-	if error_count <= 0 {
-		if val, ok := util.CommonPorts[port]; ok {
-			table.AddRow(port, "udp", val)
-		} else {
-			table.AddRow(port, "udp", "(?)")
-		}
+	if error_count > 0 {
+		return -1
 	}
-
 	defer conn.Close()
+	return port
 }
 
 func displayScanInfo(host string, port int, protocol string, table *uitable.Table) {
+	var udpPortScanned int
+	var tcpPortScanned int
+	var protocolDesc string
+
 	if protocol == "tcp" {
-		scanTCP(host, port, table)
+		tcpPortScanned = scanTCP(host, port, table)
 	} else if protocol == "udp" {
-		scanUDP(host, port, table)
+		udpPortScanned = scanUDP(host, port, table)
 	} else {
-		scanTCP(host, port, table)
-		scanUDP(host, port, table)
+		tcpPortScanned = scanTCP(host, port, table)
+		udpPortScanned = scanUDP(host, port, table)
+	}
+
+	if tcpPortScanned != -1 || udpPortScanned != -1 {
+		if tcpPortScanned == udpPortScanned {
+			protocolDesc = "tcp/udp"
+		} else if tcpPortScanned != -1 {
+			protocolDesc = "tcp"
+		} else if udpPortScanned != -1 {
+			protocolDesc = "udp"
+		}
+
+		table.AddRow(port, protocolDesc, (func(port int) string {
+			desc := "(?)"
+			if val, ok := util.CommonPorts[port]; ok {
+				desc = val
+			}
+			return desc
+		}(port)))
 	}
 }
 
@@ -86,7 +102,6 @@ func gops(options map[string]interface{}) {
 
 	status := uilive.New()
 	status.Start()
-	_ = status
 	start := *options["start"].(*int)
 	end := *options["end"].(*int)
 
