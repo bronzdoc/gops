@@ -62,8 +62,8 @@ func scanUDP(host string, port int) int {
 }
 
 func displayScanInfo(host string, port int, protocol string, table *uitable.Table) {
-	var udpPortScanned int
-	var tcpPortScanned int
+	udpPortScanned := -1
+	tcpPortScanned := -1
 	var protocolDesc string
 
 	if protocol == "tcp" {
