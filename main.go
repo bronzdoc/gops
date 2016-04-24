@@ -24,7 +24,7 @@ func getProtocol(tcp, udp *bool) string {
 	return protocol
 }
 
-func scanTCP(host string, port int, table *uitable.Table) int {
+func scanTCP(host string, port int) int {
 	conn, err := net.Dial("tcp", host)
 	if err != nil {
 		return -1
@@ -33,7 +33,7 @@ func scanTCP(host string, port int, table *uitable.Table) int {
 	return port
 }
 
-func scanUDP(host string, port int, table *uitable.Table) int {
+func scanUDP(host string, port int) int {
 	serverAddr, err := net.ResolveUDPAddr("udp", host)
 	util.LogError(err)
 
@@ -67,12 +67,12 @@ func displayScanInfo(host string, port int, protocol string, table *uitable.Tabl
 	var protocolDesc string
 
 	if protocol == "tcp" {
-		tcpPortScanned = scanTCP(host, port, table)
+		tcpPortScanned = scanTCP(host, port)
 	} else if protocol == "udp" {
-		udpPortScanned = scanUDP(host, port, table)
+		udpPortScanned = scanUDP(host, port)
 	} else {
-		tcpPortScanned = scanTCP(host, port, table)
-		udpPortScanned = scanUDP(host, port, table)
+		tcpPortScanned = scanTCP(host, port)
+		udpPortScanned = scanUDP(host, port)
 	}
 
 	if tcpPortScanned != -1 || udpPortScanned != -1 {
