@@ -104,13 +104,22 @@ func gops(options map[string]interface{}) {
 	status.Start()
 	start := *options["start"].(*int)
 	end := *options["end"].(*int)
+	port := *options["port"].(*int)
 
 	// Scan ports
-	for port := start; port <= end; port++ {
+
+	if port > 0 {
 		host := fmt.Sprintf("%s:%d", *options["host"].(*string), port)
+		fmt.Fprintf(status, "gops scanning port %d", port)
 		displayScanInfo(host, port, protocol, table)
-		fmt.Fprintf(status, "gops scanning...(%d%%)\n", int((float32(port)/float32(end))*100))
 		status.Flush()
+	} else {
+		for port := start; port <= end; port++ {
+			host := fmt.Sprintf("%s:%d", *options["host"].(*string), port)
+			displayScanInfo(host, port, protocol, table)
+			fmt.Fprintf(status, "gops scanning...(%d%%)\n", int((float32(port)/float32(end))*100))
+			status.Flush()
+		}
 	}
 
 	fmt.Fprintf(status, "gops finished scanning (100%%)\n")
@@ -125,6 +134,7 @@ func main() {
 		"udp":   flag.Bool("udp", false, "Show only udp ports open"),
 		"start": flag.Int("start", 0, "Port to start the scan"),
 		"end":   flag.Int("end", 65535, "Port to end the scan"),
+		"port":  flag.Int("port", 0, "Check if port is open"),
 	}
 	flag.Parse()
 	gops(options)
