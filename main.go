@@ -110,7 +110,7 @@ func gops(options map[string]interface{}) {
 
 	if port > 0 {
 		host := fmt.Sprintf("%s:%d", *options["host"].(*string), port)
-		fmt.Fprintf(status, "gops scanning port %d", port)
+		fmt.Fprintf(status, "gops scanning port %d\n", port)
 		displayScanInfo(host, port, protocol, table)
 		status.Flush()
 	} else {
