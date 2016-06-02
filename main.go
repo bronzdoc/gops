@@ -103,28 +103,25 @@ func displayScanInfo(host string, port int, protocol string, table *uitable.Tabl
 	}
 }
 
-func gops(options map[string]interface{}) {
-	protocol := getProtocol(options["tcp"].(*bool), options["udp"].(*bool))
+func gops() {
+	protocol := getProtocol(&tcp, &udp)
+
 	table := uitable.New()
 	table.MaxColWidth = 100
 	table.AddRow("PORT", "PROTOCOL", "DESCRIPTION")
 
 	status := uilive.New()
 	status.Start()
-	start := *options["start"].(*int)
-	end := *options["end"].(*int)
-	port := *options["port"].(*int)
 
 	// Scan ports
-
 	if port > 0 {
-		host := fmt.Sprintf("%s:%d", *options["host"].(*string), port)
+		host := fmt.Sprintf("%s:%d", host, port)
 		fmt.Fprintf(status, "gops scanning port %d\n", port)
 		displayScanInfo(host, port, protocol, table)
 		status.Flush()
 	} else {
 		for port := start; port <= end; port++ {
-			host := fmt.Sprintf("%s:%d", *options["host"].(*string), port)
+			host := fmt.Sprintf("%s:%d", host, port)
 			displayScanInfo(host, port, protocol, table)
 			fmt.Fprintf(status, "gops scanning...(%d%%)\n", int((float32(port)/float32(end))*100))
 			status.Flush()
@@ -136,15 +133,23 @@ func gops(options map[string]interface{}) {
 	fmt.Println(table)
 }
 
+var (
+	host  string
+	tcp   bool
+	udp   bool
+	start int
+	end   int
+	port  int
+)
+
 func main() {
-	options := map[string]interface{}{
-		"host":  flag.String("host", "127.0.0.1", "host to scan"),
-		"tcp":   flag.Bool("tcp", false, "Show only tcp ports open"),
-		"udp":   flag.Bool("udp", false, "Show only udp ports open"),
-		"start": flag.Int("start", 0, "Port to start the scan"),
-		"end":   flag.Int("end", 65535, "Port to end the scan"),
-		"port":  flag.Int("port", 0, "Check if port is open"),
-	}
+	flag.StringVar(&host, "host", "127.0.0.1", "Specify host")
+	flag.BoolVar(&tcp, "tcp", false, "Show only tcp ports open")
+	flag.BoolVar(&udp, "udp", false, "Show only udp ports open")
+	flag.IntVar(&start, "start", 0, "Port to start the scan")
+	flag.IntVar(&end, "end", 65535, "Port to end the scan")
+	flag.IntVar(&port, "port", 0, "Check if port is open")
+
 	flag.Parse()
-	gops(options)
+	gops()
 }
