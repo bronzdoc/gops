@@ -51,6 +51,7 @@ func scanUDP(host string, port int) int {
 		util.LogError(err)
 		return -1
 	}
+	defer conn.Close()
 
 	// Write 3 times to the udp socket and check
 	// if there's any kind of error
@@ -66,7 +67,6 @@ func scanUDP(host string, port int) int {
 	if error_count > 0 {
 		return -1
 	}
-	defer conn.Close()
 	return port
 }
 
