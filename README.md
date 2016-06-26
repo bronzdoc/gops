@@ -2,7 +2,11 @@
 
 #### Usage
 
-<code>gops -host=somehost.com -tcp</code>
+To scan a  remote server<br />
+```gops -host=somehost.com -tcp```
+
+To scan locally<br />
+```gops -tcp```
 
 #### Flags
     -host  host to scan
