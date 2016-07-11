@@ -9,6 +9,12 @@ import (
 	"net"
 )
 
+type Info struct {
+	port     int
+	protocol string
+	desc     string
+}
+
 func getProtocol(tcp, udp *bool) string {
 	var protocol string
 
@@ -70,7 +76,7 @@ func scanUDP(host string, port int) int {
 	return port
 }
 
-func displayScanInfo(host string, port int, protocol string, table *uitable.Table) {
+func displayScanInfo(host string, port int, protocol string, channel chan Info) {
 	udpPortScanned := -1
 	tcpPortScanned := -1
 	var protocolDesc string
@@ -92,18 +98,26 @@ func displayScanInfo(host string, port int, protocol string, table *uitable.Tabl
 		} else if udpPortScanned != -1 {
 			protocolDesc = "udp"
 		}
-
-		table.AddRow(port, protocolDesc, (func(port int) string {
-			desc := "(?)"
-			if val, ok := util.CommonPorts[port]; ok {
-				desc = val
-			}
-			return desc
-		}(port)))
+		info := Info{
+			port:     port,
+			protocol: protocolDesc,
+			desc: func(port int) string { // Build protocol description
+				desc := "(?)"
+				if val, ok := util.CommonPorts[port]; ok {
+					desc = val
+				}
+				return desc
+			}(port),
+		}
+		// Send data to channel
+		channel <- info
 	}
 }
 
 func gops() {
+
+	dataChan := make(chan Info)
+
 	protocol := getProtocol(&tcp, &udp)
 
 	table := uitable.New()
@@ -113,24 +127,44 @@ func gops() {
 	status := uilive.New()
 	status.Start()
 
+	display := uilive.New()
+	display.Start()
+
 	// Scan ports
 	if port > 0 {
 		host := fmt.Sprintf("%s:%d", host, port)
 		fmt.Fprintf(status, "gops scanning port %d\n", port)
-		displayScanInfo(host, port, protocol, table)
+		go displayScanInfo(host, port, protocol, dataChan)
+		for {
+			go func() {
+				info := <-dataChan
+				table.AddRow(info.port, info.protocol, info.desc)
+			}()
+		}
 		status.Flush()
 	} else {
-		for port := start; port <= end; port++ {
-			host := fmt.Sprintf("%s:%d", host, port)
-			displayScanInfo(host, port, protocol, table)
-			fmt.Fprintf(status, "gops scanning...(%d%%)\n", int((float32(port)/float32(end))*100))
-			status.Flush()
+
+		go func() {
+			for port := start; port <= end; port++ {
+				//fmt.Fprintf(status, "gops scanning...(%d%%)\n", int((float32(port)/float32(end))*100))
+				//status.Flush()
+				host := fmt.Sprintf("%s:%d", host, port)
+				displayScanInfo(host, port, protocol, dataChan)
+			}
+			close(dataChan)
+		}()
+
+		for info := range dataChan {
+			table.AddRow(info.port, info.protocol, info.desc)
+			fmt.Fprintf(display, "%s", table)
 		}
 	}
 
-	fmt.Fprintf(status, "gops finished scanning (100%%)\n")
-	status.Stop()
-	fmt.Println(table)
+	//fmt.Fprintf(status, "gops finished scanning (100%%)\n")
+	//status.Stop()
+
+	fmt.Fprintf(display, "%s", table)
+	display.Stop()
 }
 
 var (
