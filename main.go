@@ -13,6 +13,7 @@ type Info struct {
 	port     int
 	protocol string
 	desc     string
+	empty    bool
 }
 
 func getProtocol(tcp, udp *bool) string {
@@ -76,7 +77,7 @@ func scanUDP(host string, port int) int {
 	return port
 }
 
-func displayScanInfo(host string, port int, protocol string, channel chan Info) {
+func displayScanInfo(host string, port int, protocol string) Info {
 	udpPortScanned := -1
 	tcpPortScanned := -1
 	var protocolDesc string
@@ -99,6 +100,7 @@ func displayScanInfo(host string, port int, protocol string, channel chan Info) 
 			protocolDesc = "udp"
 		}
 		info := Info{
+			empty:    false,
 			port:     port,
 			protocol: protocolDesc,
 			desc: func(port int) string { // Build protocol description
@@ -109,16 +111,37 @@ func displayScanInfo(host string, port int, protocol string, channel chan Info) 
 				return desc
 			}(port),
 		}
-		// Send data to channel
-		channel <- info
+		return info
+	}
+	return Info{empty: true}
+}
+
+type JobInfo struct {
+	host     string
+	port     int
+	end      int
+	protocol string
+}
+
+func worker(statusChan chan int, jobChan chan JobInfo, dataChan chan Info) {
+	for job := range jobChan {
+		info := displayScanInfo(job.host, job.port, job.protocol)
+		if !info.empty {
+			dataChan <- info
+		}
+		statusChan <- 1
 	}
 }
 
 func gops() {
 
-	dataChan := make(chan Info)
+	dataChan := make(chan Info, 10)
+	jobChan := make(chan JobInfo, 10)
+	statusChan := make(chan int)
 
 	protocol := getProtocol(&tcp, &udp)
+
+	//var portsToScann int
 
 	table := uitable.New()
 	table.MaxColWidth = 100
@@ -130,11 +153,26 @@ func gops() {
 	display := uilive.New()
 	display.Start()
 
+	portsToScann := end - start
+	scannedPorts := 0
+	go func() {
+		for counter := range statusChan {
+			scannedPorts += counter
+			fmt.Fprintf(status, "gops scanning...(%d%%)\n", int((float32(scannedPorts)/float32(portsToScann))*100))
+			status.Flush()
+			if scannedPorts == portsToScann {
+				close(dataChan)
+			}
+
+		}
+	}()
+
 	// Scan ports
 	if port > 0 {
+		//portsToScann = 1
 		host := fmt.Sprintf("%s:%d", host, port)
 		fmt.Fprintf(status, "gops scanning port %d\n", port)
-		go displayScanInfo(host, port, protocol, dataChan)
+		go displayScanInfo(host, port, protocol)
 		for {
 			go func() {
 				info := <-dataChan
@@ -144,26 +182,26 @@ func gops() {
 		status.Flush()
 	} else {
 
-		go func() {
-			for port := start; port <= end; port++ {
-				//fmt.Fprintf(status, "gops scanning...(%d%%)\n", int((float32(port)/float32(end))*100))
-				//status.Flush()
-				host := fmt.Sprintf("%s:%d", host, port)
-				displayScanInfo(host, port, protocol, dataChan)
-			}
-			close(dataChan)
-		}()
+		// Workers
+		for i := 0; i < 5; i++ {
+			go worker(statusChan, jobChan, dataChan)
+		}
+
+		for port := start; port <= end; port++ {
+			host := fmt.Sprintf("%s:%d", host, port)
+			jobChan <- JobInfo{host, port, end, protocol}
+		}
+		close(jobChan)
 
 		for info := range dataChan {
 			table.AddRow(info.port, info.protocol, info.desc)
-			fmt.Fprintf(display, "%s", table)
 		}
 	}
 
-	//fmt.Fprintf(status, "gops finished scanning (100%%)\n")
-	//status.Stop()
+	fmt.Fprintf(status, "gops finished scanning (100%%)\n")
+	status.Stop()
 
-	fmt.Fprintf(display, "%s", table)
+	fmt.Fprintf(display, "%s\n", table)
 	display.Stop()
 }
 
