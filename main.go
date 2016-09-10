@@ -23,13 +23,13 @@ type Job struct {
 	protocol string
 }
 
-func worker(statusChan chan int, jobs chan Job, resultsChan chan ScanInfo) {
+func worker(status chan int, jobs chan Job, results chan ScanInfo) {
 	for job := range jobs {
 		ScanInfo := getScannedInfo(job.host, job.port, job.protocol)
 		if !ScanInfo.empty {
-			resultsChan <- ScanInfo
+			results <- ScanInfo
 		}
-		statusChan <- 1
+		status <- 1
 	}
 }
 
@@ -135,9 +135,9 @@ func getScannedInfo(host string, port int, protocol string) ScanInfo {
 
 func gops() {
 
-	resultsChan := make(chan ScanInfo, 10)
+	results := make(chan ScanInfo, 10)
 	jobs := make(chan Job, 10)
-	statusChan := make(chan int)
+	status := make(chan int)
 
 	protocol := getProtocol(&tcp, &udp)
 
@@ -145,8 +145,8 @@ func gops() {
 	table.MaxColWidth = 100
 	table.AddRow("PORT", "PROTOCOL", "DESCRIPTION")
 
-	status := uilive.New()
-	status.Start()
+	loader := uilive.New()
+	loader.Start()
 
 	display := uilive.New()
 	display.Start()
@@ -157,24 +157,23 @@ func gops() {
 	}
 
 	portsToScann := end - start
-	fmt.Printf("%d", portsToScann)
 	scannedPorts := 0
 
-	// Status handler
+	// loader handler
 	go func() {
-		for counter := range statusChan {
+		for counter := range status {
 			scannedPorts += counter
-			fmt.Fprintf(status, "gops scanning...(%d%%)\n", int((float32(scannedPorts)/float32(portsToScann))*100))
-			status.Flush()
+			fmt.Fprintf(loader, "gops scanning...(%d%%)\n", int((float32(scannedPorts)/float32(portsToScann))*100))
+			loader.Flush()
 			if scannedPorts == portsToScann {
-				close(resultsChan)
+				close(results)
 			}
 		}
 	}()
 
 	// Workers
 	for i := 0; i < 5; i++ {
-		go worker(statusChan, jobs, resultsChan)
+		go worker(status, jobs, results)
 	}
 
 	// Enqueue jobs
@@ -184,12 +183,12 @@ func gops() {
 	}
 	close(jobs)
 
-	for Scannedinfo := range resultsChan {
+	for Scannedinfo := range results {
 		table.AddRow(Scannedinfo.port, Scannedinfo.protocol, Scannedinfo.desc)
 	}
 
-	fmt.Fprintf(status, "gops finished scanning (100%%)\n")
-	status.Stop()
+	fmt.Fprintf(loader, "gops finished scanning (100%%)\n")
+	loader.Stop()
 
 	fmt.Fprintf(display, "%s\n", table)
 	display.Stop()
