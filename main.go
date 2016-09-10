@@ -16,6 +16,23 @@ type ScanInfo struct {
 	empty    bool
 }
 
+type Job struct {
+	host     string
+	port     int
+	end      int
+	protocol string
+}
+
+func worker(statusChan chan int, jobs chan Job, resultsChan chan ScanInfo) {
+	for job := range jobs {
+		ScanInfo := getScannedInfo(job.host, job.port, job.protocol)
+		if !ScanInfo.empty {
+			resultsChan <- ScanInfo
+		}
+		statusChan <- 1
+	}
+}
+
 func getProtocol(tcp, udp *bool) string {
 	var protocol string
 
@@ -116,23 +133,6 @@ func getScannedInfo(host string, port int, protocol string) ScanInfo {
 	return ScanInfo{empty: true}
 }
 
-type Job struct {
-	host     string
-	port     int
-	end      int
-	protocol string
-}
-
-func worker(statusChan chan int, jobs chan Job, resultsChan chan ScanInfo) {
-	for job := range jobs {
-		ScanInfo := getScannedInfo(job.host, job.port, job.protocol)
-		if !ScanInfo.empty {
-			resultsChan <- ScanInfo
-		}
-		statusChan <- 1
-	}
-}
-
 func gops() {
 
 	resultsChan := make(chan ScanInfo, 10)
@@ -151,7 +151,13 @@ func gops() {
 	display := uilive.New()
 	display.Start()
 
+	if port > 0 {
+		start = port
+		end = start + 1
+	}
+
 	portsToScann := end - start
+	fmt.Printf("%d", portsToScann)
 	scannedPorts := 0
 
 	// Status handler
@@ -166,35 +172,20 @@ func gops() {
 		}
 	}()
 
-	// Scan ports
-	if port > 0 {
+	// Workers
+	for i := 0; i < 5; i++ {
+		go worker(statusChan, jobs, resultsChan)
+	}
+
+	// Enqueue jobs
+	for port := start; port <= end; port++ {
 		host := fmt.Sprintf("%s:%d", host, port)
-		fmt.Fprintf(status, "gops scanning port %d\n", port)
-		go getScannedInfo(host, port, protocol)
-		for {
-			go func() {
-				info := <-resultsChan
-				table.AddRow(info.port, info.protocol, info.desc)
-			}()
-		}
-		status.Flush()
-	} else {
+		jobs <- Job{host, port, end, protocol}
+	}
+	close(jobs)
 
-		// Workers
-		for i := 0; i < 5; i++ {
-			go worker(statusChan, jobs, resultsChan)
-		}
-
-		// Enqueue jobs
-		for port := start; port <= end; port++ {
-			host := fmt.Sprintf("%s:%d", host, port)
-			jobs <- Job{host, port, end, protocol}
-		}
-		close(jobs)
-
-		for Scannedinfo := range resultsChan {
-			table.AddRow(Scannedinfo.port, Scannedinfo.protocol, Scannedinfo.desc)
-		}
+	for Scannedinfo := range resultsChan {
+		table.AddRow(Scannedinfo.port, Scannedinfo.protocol, Scannedinfo.desc)
 	}
 
 	fmt.Fprintf(status, "gops finished scanning (100%%)\n")
