@@ -23,7 +23,7 @@ type Job struct {
 	protocol string
 }
 
-func worker(status chan int, jobs chan Job, results chan ScanInfo) {
+func worker(status chan<- int, jobs <-chan Job, results chan<- ScanInfo) {
 	for job := range jobs {
 		ScanInfo := getScannedInfo(job.host, job.port, job.protocol)
 		if !ScanInfo.empty {
@@ -151,21 +151,23 @@ func gops() {
 	display := uilive.New()
 	display.Start()
 
+	var portsToScan int
 	if port > 0 {
 		start = port
-		end = start + 1
+		end = port
+		portsToScan = 1
+	} else {
+		portsToScan = end - start
 	}
-
-	portsToScann := end - start
-	scannedPorts := 0
 
 	// loader handler
 	go func() {
+		scannedPorts := 0
 		for counter := range status {
 			scannedPorts += counter
-			fmt.Fprintf(loader, "gops scanning...(%d%%)\n", int((float32(scannedPorts)/float32(portsToScann))*100))
+			fmt.Fprintf(loader, "gops scanning...(%d%%)\n", int((float32(scannedPorts)/float32(portsToScan))*100))
 			loader.Flush()
-			if scannedPorts == portsToScann {
+			if scannedPorts == portsToScan {
 				close(results)
 			}
 		}
