@@ -7,6 +7,7 @@ import (
 	"github.com/gosuri/uilive"
 	"github.com/gosuri/uitable"
 	"net"
+	"sync"
 )
 
 type ScanInfo struct {
@@ -24,10 +25,11 @@ type Job struct {
 }
 
 func worker(status chan<- int, jobs <-chan Job, results chan<- ScanInfo) {
+	defer wg.Done()
 	for job := range jobs {
-		ScanInfo := getScannedInfo(job.host, job.port, job.protocol)
-		if !ScanInfo.empty {
-			results <- ScanInfo
+		scanInfo := getScannedInfo(job.host, job.port, job.protocol)
+		if !scanInfo.empty {
+			results <- scanInfo
 		}
 		status <- 1
 	}
@@ -116,7 +118,7 @@ func getScannedInfo(host string, port int, protocol string) ScanInfo {
 		} else if udpPortScanned != -1 {
 			protocolDesc = "udp"
 		}
-		info := ScanInfo{
+		scanInfo := ScanInfo{
 			empty:    false,
 			port:     port,
 			protocol: protocolDesc,
@@ -128,16 +130,15 @@ func getScannedInfo(host string, port int, protocol string) ScanInfo {
 				return desc
 			}(port),
 		}
-		return info
+		return scanInfo
 	}
 	return ScanInfo{empty: true}
 }
 
 func gops() {
-
 	results := make(chan ScanInfo, 10)
 	jobs := make(chan Job, 10)
-	status := make(chan int)
+	status := make(chan int, 10)
 
 	protocol := getProtocol(&tcp, &udp)
 
@@ -164,17 +165,19 @@ func gops() {
 	go func() {
 		scannedPorts := 0
 		for counter := range status {
-			scannedPorts += counter
-			fmt.Fprintf(loader, "gops scanning...(%d%%)\n", int((float32(scannedPorts)/float32(portsToScan))*100))
+			fmt.Fprintf(
+				loader,
+				"gops scanning...(%d%%)\n",
+				int((float32(scannedPorts)/float32(portsToScan))*100),
+			)
 			loader.Flush()
-			if scannedPorts == portsToScan {
-				close(results)
-			}
+			scannedPorts += counter
 		}
 	}()
 
 	// Workers
-	for i := 0; i < 5; i++ {
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
 		go worker(status, jobs, results)
 	}
 
@@ -185,9 +188,15 @@ func gops() {
 	}
 	close(jobs)
 
-	for Scannedinfo := range results {
-		table.AddRow(Scannedinfo.port, Scannedinfo.protocol, Scannedinfo.desc)
-	}
+	go func() {
+		for ScannedInfo := range results {
+			table.AddRow(ScannedInfo.port, ScannedInfo.protocol, ScannedInfo.desc)
+		}
+		close(results)
+	}()
+
+	// Wait for workers to finish
+	wg.Wait()
 
 	fmt.Fprintf(loader, "gops finished scanning (100%%)\n")
 	loader.Stop()
@@ -203,6 +212,7 @@ var (
 	start int
 	end   int
 	port  int
+	wg    sync.WaitGroup
 )
 
 func main() {
