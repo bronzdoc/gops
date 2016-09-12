@@ -6,8 +6,36 @@ import (
 	"github.com/bronzdoc/gops/lib/util"
 	"github.com/gosuri/uilive"
 	"github.com/gosuri/uitable"
+	"github.com/tj/go-spin"
 	"net"
+	"sync"
+	"time"
 )
+
+type ScanInfo struct {
+	port     int
+	protocol string
+	desc     string
+	empty    bool
+}
+
+type Job struct {
+	host     string
+	port     int
+	end      int
+	protocol string
+}
+
+func worker(jobs <-chan Job, results chan<- ScanInfo, notifyFinish chan<- bool) {
+	defer wg.Done()
+	for job := range jobs {
+		scanInfo := getScannedInfo(job.host, job.port, job.protocol)
+		if !scanInfo.empty {
+			results <- scanInfo
+		}
+	}
+	notifyFinish <- true
+}
 
 func getProtocol(tcp, udp *bool) string {
 	var protocol string
@@ -70,7 +98,7 @@ func scanUDP(host string, port int) int {
 	return port
 }
 
-func displayScanInfo(host string, port int, protocol string, table *uitable.Table) {
+func getScannedInfo(host string, port int, protocol string) ScanInfo {
 	udpPortScanned := -1
 	tcpPortScanned := -1
 	var protocolDesc string
@@ -92,45 +120,88 @@ func displayScanInfo(host string, port int, protocol string, table *uitable.Tabl
 		} else if udpPortScanned != -1 {
 			protocolDesc = "udp"
 		}
-
-		table.AddRow(port, protocolDesc, (func(port int) string {
-			desc := "(?)"
-			if val, ok := util.CommonPorts[port]; ok {
-				desc = val
-			}
-			return desc
-		}(port)))
+		scanInfo := ScanInfo{
+			empty:    false,
+			port:     port,
+			protocol: protocolDesc,
+			desc: func(port int) string { // Build protocol description
+				desc := "(?)"
+				if val, ok := util.CommonPorts[port]; ok {
+					desc = val
+				}
+				return desc
+			}(port),
+		}
+		return scanInfo
 	}
+	return ScanInfo{empty: true}
 }
 
 func gops() {
+	results := make(chan ScanInfo, 10)
+	jobs := make(chan Job, 10)
+	notifyFinish := make(chan bool)
+
+	MAXWORKERS := 10
+
 	protocol := getProtocol(&tcp, &udp)
 
 	table := uitable.New()
 	table.MaxColWidth = 100
 	table.AddRow("PORT", "PROTOCOL", "DESCRIPTION")
 
-	status := uilive.New()
-	status.Start()
+	spinner := spin.New()
 
-	// Scan ports
+	display := uilive.New()
+	display.Start()
+
 	if port > 0 {
-		host := fmt.Sprintf("%s:%d", host, port)
-		fmt.Fprintf(status, "gops scanning port %d\n", port)
-		displayScanInfo(host, port, protocol, table)
-		status.Flush()
-	} else {
-		for port := start; port <= end; port++ {
-			host := fmt.Sprintf("%s:%d", host, port)
-			displayScanInfo(host, port, protocol, table)
-			fmt.Fprintf(status, "gops scanning...(%d%%)\n", int((float32(port)/float32(end))*100))
-			status.Flush()
-		}
+		start = port
+		end = port
 	}
 
-	fmt.Fprintf(status, "gops finished scanning (100%%)\n")
-	status.Stop()
-	fmt.Println(table)
+	// loader handler
+	go func() {
+		for {
+			fmt.Printf("\r  \033[36mgops %s\033[m ", spinner.Next())
+			time.Sleep(60 * time.Millisecond)
+		}
+	}()
+
+	// Workers
+	for i := 0; i < MAXWORKERS; i++ {
+		wg.Add(1)
+		go worker(jobs, results, notifyFinish)
+	}
+
+	// Enqueue jobs
+	for port := start; port <= end; port++ {
+		host := fmt.Sprintf("%s:%d", host, port)
+		jobs <- Job{host, port, end, protocol}
+	}
+	close(jobs)
+
+	wg.Add(1)
+	go func() {
+		workersCount := MAXWORKERS
+		defer wg.Done()
+		for {
+			select {
+			case scannedInfo := <-results:
+				table.AddRow(scannedInfo.port, scannedInfo.protocol, scannedInfo.desc)
+			case <-notifyFinish:
+				workersCount--
+				if workersCount == 0 {
+					return
+				}
+			}
+		}
+	}()
+
+	wg.Wait()
+
+	fmt.Fprintf(display, "\n%s\n", table)
+	display.Stop()
 }
 
 var (
@@ -140,6 +211,7 @@ var (
 	start int
 	end   int
 	port  int
+	wg    sync.WaitGroup
 )
 
 func main() {
