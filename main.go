@@ -6,8 +6,10 @@ import (
 	"github.com/bronzdoc/gops/lib/util"
 	"github.com/gosuri/uilive"
 	"github.com/gosuri/uitable"
+	"github.com/tj/go-spin"
 	"net"
 	"sync"
+	"time"
 )
 
 type ScanInfo struct {
@@ -24,15 +26,15 @@ type Job struct {
 	protocol string
 }
 
-func worker(status chan<- int, jobs <-chan Job, results chan<- ScanInfo) {
+func worker(jobs <-chan Job, results chan<- ScanInfo, notifyFinish chan<- bool) {
 	defer wg.Done()
 	for job := range jobs {
 		scanInfo := getScannedInfo(job.host, job.port, job.protocol)
 		if !scanInfo.empty {
 			results <- scanInfo
 		}
-		status <- 1
 	}
+	notifyFinish <- true
 }
 
 func getProtocol(tcp, udp *bool) string {
@@ -138,7 +140,9 @@ func getScannedInfo(host string, port int, protocol string) ScanInfo {
 func gops() {
 	results := make(chan ScanInfo, 10)
 	jobs := make(chan Job, 10)
-	status := make(chan int, 10)
+	notifyFinish := make(chan bool)
+
+	MAXWORKERS := 10
 
 	protocol := getProtocol(&tcp, &udp)
 
@@ -146,39 +150,28 @@ func gops() {
 	table.MaxColWidth = 100
 	table.AddRow("PORT", "PROTOCOL", "DESCRIPTION")
 
-	loader := uilive.New()
-	loader.Start()
+	spinner := spin.New()
 
 	display := uilive.New()
 	display.Start()
 
-	var portsToScan int
 	if port > 0 {
 		start = port
 		end = port
-		portsToScan = 1
-	} else {
-		portsToScan = end - start
 	}
 
 	// loader handler
 	go func() {
-		scannedPorts := 0
-		for counter := range status {
-			fmt.Fprintf(
-				loader,
-				"gops scanning...(%d%%)\n",
-				int((float32(scannedPorts)/float32(portsToScan))*100),
-			)
-			loader.Flush()
-			scannedPorts += counter
+		for {
+			fmt.Printf("\r  \033[36mgops %s\033[m ", spinner.Next())
+			time.Sleep(60 * time.Millisecond)
 		}
 	}()
 
 	// Workers
-	for i := 0; i < 8; i++ {
+	for i := 0; i < MAXWORKERS; i++ {
 		wg.Add(1)
-		go worker(status, jobs, results)
+		go worker(jobs, results, notifyFinish)
 	}
 
 	// Enqueue jobs
@@ -188,20 +181,26 @@ func gops() {
 	}
 	close(jobs)
 
+	wg.Add(1)
 	go func() {
-		for ScannedInfo := range results {
-			table.AddRow(ScannedInfo.port, ScannedInfo.protocol, ScannedInfo.desc)
+		workersCount := MAXWORKERS
+		defer wg.Done()
+		for {
+			select {
+			case scannedInfo := <-results:
+				table.AddRow(scannedInfo.port, scannedInfo.protocol, scannedInfo.desc)
+			case <-notifyFinish:
+				workersCount--
+				if workersCount == 0 {
+					return
+				}
+			}
 		}
-		close(results)
 	}()
 
-	// Wait for workers to finish
 	wg.Wait()
 
-	fmt.Fprintf(loader, "gops finished scanning (100%%)\n")
-	loader.Stop()
-
-	fmt.Fprintf(display, "%s\n", table)
+	fmt.Fprintf(display, "\n%s\n", table)
 	display.Stop()
 }
 
