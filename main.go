@@ -136,7 +136,7 @@ func gops() {
 	jobs := make(chan Job, 10)
 	notifyFinish := make(chan bool)
 
-	MAXWORKERS := 10
+	MAXWORKERS := 50
 
 	protocol := getProtocol(&tcp, &udp)
 
