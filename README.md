@@ -1,5 +1,8 @@
 ### gops - a toy port scanner built in GO
 
+#### Install
+```go get github.com/bronzdoc/gops```
+
 #### Usage
 
 To scan a  remote server<br />
